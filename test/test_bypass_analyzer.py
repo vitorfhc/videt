@@ -99,6 +99,24 @@ class TestAnalyzeBypass(unittest.TestCase):
         prompt = captured['body']['messages'][0]['content']
         self.assertIn("UNIQUE_DIFF_MARKER", prompt)
 
+    def test_strips_markdown_fences(self):
+        inner = {"bypassRisk": "low", "reasoning": "minor edge case", "example": ""}
+        fenced = f"```json\n{json.dumps(inner)}\n```"
+        body = json.dumps({"content": [{"text": fenced}]}).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: resp
+        resp.__exit__ = MagicMock(return_value=False)
+        with patch('urllib.request.urlopen', return_value=resp):
+            result = analyze_bypass("key", "diff", "XSS", "escaped output")
+        self.assertEqual(result["bypassRisk"], "low")
+
+    def test_raises_on_unexpected_bypass_risk(self):
+        bad = {"bypassRisk": "unknown", "reasoning": "can't tell", "example": ""}
+        with patch('urllib.request.urlopen', return_value=self._make_api_response(bad)):
+            with self.assertRaises(ValueError):
+                analyze_bypass("key", "diff", "XSS", "escaped output")
+
 
 class TestBuildBypassDisplay(unittest.TestCase):
 

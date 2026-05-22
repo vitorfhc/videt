@@ -71,7 +71,16 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
-    return json.loads(data["content"][0]["text"].strip())
+    text = data["content"][0]["text"].strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    result = json.loads(text)
+    if result.get("bypassRisk") not in ("none", "low", "medium", "high"):
+        raise ValueError(f"unexpected bypassRisk value: {result.get('bypassRisk')!r}")
+    return result
 
 
 def build_bypass_display(bypass_analysis):
@@ -111,6 +120,8 @@ def main():
             fix_desc = finding.get("analysis", {}).get("description", "")
 
             diff = fetch_diff(owner, repo, sha)
+            if diff.startswith("# Error fetching diff:") or not diff.strip():
+                raise ValueError(f"diff unavailable: {diff[:120]}")
             bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc)
         except Exception as e:
             bypass = {
