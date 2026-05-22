@@ -26,7 +26,7 @@ def fetch_diff(owner, repo, sha):
             parts.append(f"--- a/{f['filename']}\n{patch}")
 
     combined = "\n".join(parts)
-    return combined[:8000]
+    return combined[:20000]
 
 
 _BYPASS_PROMPT = """\

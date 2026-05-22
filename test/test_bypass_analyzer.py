@@ -32,12 +32,12 @@ class TestFetchDiff(unittest.TestCase):
         self.assertIn("@@ -1 +1 @@\n-old\n+new", result)
         self.assertIn("--- a/src/bar.py", result)
 
-    def test_truncates_at_8000_chars(self):
-        long_patch = "x" * 10000
+    def test_truncates_at_20000_chars(self):
+        long_patch = "x" * 25000
         payload = {"files": [{"filename": "big.py", "patch": long_patch}]}
         with patch('urllib.request.urlopen', return_value=self._make_response(payload)):
             result = fetch_diff("owner", "repo", "abc123")
-        self.assertLessEqual(len(result), 8000)
+        self.assertLessEqual(len(result), 20000)
 
     def test_returns_error_message_on_network_failure(self):
         with patch('urllib.request.urlopen', side_effect=Exception("timeout")):
