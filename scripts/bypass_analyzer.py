@@ -126,11 +126,13 @@ def main():
             sha = finding["commit"]["sha"]
             vuln_type = finding.get("analysis", {}).get("vulnerabilityType", "Unknown")
             fix_desc = finding.get("analysis", {}).get("description", "")
+            affected_code = finding.get("analysis", {}).get("affectedCode", "")
+            proof_of_concept = finding.get("analysis", {}).get("proofOfConcept", "")
 
             diff = fetch_diff(owner, repo, sha)
             if diff.startswith("# Error fetching diff:") or not diff.strip():
                 raise ValueError(f"diff unavailable: {diff[:120]}")
-            bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc)
+            bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc, affected_code, proof_of_concept)
         except Exception as e:
             bypass = {
                 "bypassRisk": "unknown",

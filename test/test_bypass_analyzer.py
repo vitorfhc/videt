@@ -229,6 +229,43 @@ class TestMain(unittest.TestCase):
         self.assertEqual(len(enriched), 1)
         self.assertEqual(enriched[0]["bypassAnalysis"]["bypassRisk"], "high")
 
+    def test_main_passes_affected_code_and_poc_to_analyzer(self):
+        findings = [
+            {
+                "repo": {"owner": "acme", "repo": "app"},
+                "commit": {"sha": "abc123", "url": "https://github.com/acme/app/commit/abc123",
+                           "message": "fix", "author": "dev", "date": "2026-01-01T00:00:00Z"},
+                "analysis": {
+                    "vulnerabilityType": "XSS",
+                    "description": "escaped output",
+                    "affectedCode": "AFFECTED_CODE_MARKER",
+                    "proofOfConcept": "POC_MARKER",
+                },
+            }
+        ]
+        bypass = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            if "api.anthropic.com" in req.full_url:
+                body = json.loads(req.data)
+                captured['user_content'] = body['messages'][0]['content']
+                return self._make_api_response(bypass)
+            return self._make_github_response()
+
+        out_path = os.path.join(tempfile.gettempdir(), "test_enriched_poc.json")
+        env = {
+            "RESULTS": json.dumps(findings),
+            "ANTHROPIC_API_KEY": "test-key",
+            "ENRICHED_OUTPUT": out_path,
+        }
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen), \
+             patch.dict('os.environ', env):
+            main()
+
+        self.assertIn("AFFECTED_CODE_MARKER", captured['user_content'])
+        self.assertIn("POC_MARKER", captured['user_content'])
+
     def test_main_handles_per_finding_error_gracefully(self):
         findings = [
             {
