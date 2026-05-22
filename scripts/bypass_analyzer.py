@@ -56,8 +56,8 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
         .replace("{diff}", diff)
     )
     payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 512,
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 1500,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(

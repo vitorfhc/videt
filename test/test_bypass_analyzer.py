@@ -85,8 +85,8 @@ class TestAnalyzeBypass(unittest.TestCase):
             return self._make_api_response(expected)
         with patch('urllib.request.urlopen', side_effect=fake_urlopen):
             analyze_bypass("key", "diff", "XSS", "escaped output")
-        self.assertEqual(captured['body']['model'], "claude-haiku-4-5-20251001")
-        self.assertEqual(captured['body']['max_tokens'], 512)
+        self.assertEqual(captured['body']['model'], "claude-sonnet-4-6")
+        self.assertEqual(captured['body']['max_tokens'], 1500)
 
     def test_diff_appears_in_prompt(self):
         expected = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
