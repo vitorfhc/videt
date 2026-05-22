@@ -156,23 +156,23 @@ class TestBuildBypassDisplay(unittest.TestCase):
 
     def test_none_risk(self):
         result = build_bypass_display({"bypassRisk": "none", "reasoning": "ok", "example": ""})
-        self.assertEqual(result, "✅ Fix looks complete")
+        self.assertEqual(result, "Fix looks complete")
 
     def test_low_risk(self):
         result = build_bypass_display({"bypassRisk": "low", "reasoning": "minor concern", "example": ""})
-        self.assertEqual(result, "⚠️ minor concern")
+        self.assertEqual(result, "Low bypass risk: minor concern")
 
     def test_medium_risk_includes_example(self):
         result = build_bypass_display({"bypassRisk": "medium", "reasoning": "partial fix", "example": "payload"})
-        self.assertEqual(result, "🟡 partial fix — payload")
+        self.assertEqual(result, "Medium bypass risk: partial fix — payload")
 
     def test_high_risk_includes_example(self):
         result = build_bypass_display({"bypassRisk": "high", "reasoning": "bypassable", "example": "../etc"})
-        self.assertEqual(result, "🔴 bypassable — ../etc")
+        self.assertEqual(result, "High bypass risk: bypassable — ../etc")
 
     def test_unknown_risk(self):
         result = build_bypass_display({"bypassRisk": "unknown", "reasoning": "", "example": ""})
-        self.assertEqual(result, "❓ Analysis unavailable")
+        self.assertEqual(result, "Analysis unavailable")
 
 
 class TestMain(unittest.TestCase):

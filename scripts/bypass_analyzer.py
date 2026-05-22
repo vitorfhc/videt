@@ -86,20 +86,19 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description, affected_code="", 
 
 
 def build_bypass_display(bypass_analysis):
-    """Convert bypass analysis dict to a Discord embed string. Mirrors the bash case statement in the workflow."""
     risk = bypass_analysis.get("bypassRisk", "unknown")
     reasoning = bypass_analysis.get("reasoning", "")
     example = bypass_analysis.get("example", "")
     detail = f"{reasoning} — {example}" if example else reasoning
     if risk == "none":
-        return "✅ Fix looks complete"
+        return "Fix looks complete"
     if risk == "low":
-        return f"⚠️ {detail}"
+        return f"Low bypass risk: {detail}"
     if risk == "medium":
-        return f"🟡 {detail}"
+        return f"Medium bypass risk: {detail}"
     if risk == "high":
-        return f"🔴 {detail}"
-    return "❓ Analysis unavailable"
+        return f"High bypass risk: {detail}"
+    return "Analysis unavailable"
 
 
 def main():
