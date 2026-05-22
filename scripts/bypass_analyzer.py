@@ -26,19 +26,13 @@ def fetch_diff(owner, repo, sha):
             parts.append(f"--- a/{f['filename']}\n{patch}")
 
     combined = "\n".join(parts)
-    return combined[:8000]
+    return combined[:20000]
 
 
-_BYPASS_PROMPT = """\
+_SYSTEM_PROMPT = """\
 You are a security code reviewer. A commit was identified as a security fix.
 Analyze whether the implementation has bypasses or subtle flaws that still allow exploitation.
 Only consider what is visible in the diff — do not speculate about other code paths.
-
-Vulnerability type: {vuln_type}
-Fix description: {fix_description}
-
-Diff:
-{diff}
 
 Respond with JSON only (no markdown):
 {
@@ -48,17 +42,22 @@ Respond with JSON only (no markdown):
 }"""
 
 
-def analyze_bypass(api_key, diff, vuln_type, fix_description):
-    prompt = (
-        _BYPASS_PROMPT
-        .replace("{vuln_type}", vuln_type)
-        .replace("{fix_description}", fix_description)
-        .replace("{diff}", diff)
-    )
+def analyze_bypass(api_key, diff, vuln_type, fix_description, affected_code="", proof_of_concept=""):
+    parts = [
+        f"Vulnerability type: {vuln_type}",
+        f"Fix description: {fix_description}",
+    ]
+    if affected_code:
+        parts.append(f"Vulnerable code before patch: {affected_code}")
+    if proof_of_concept:
+        parts.append(f"Original proof of concept: {proof_of_concept}")
+    parts.append(f"\nDiff:\n{diff}")
+    user_content = "\n".join(parts)
     payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 512,
-        "messages": [{"role": "user", "content": prompt}],
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 1500,
+        "system": [{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+        "messages": [{"role": "user", "content": user_content}],
     }).encode()
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
@@ -66,6 +65,7 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
         headers={
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
             "content-type": "application/json",
         },
     )
@@ -84,20 +84,19 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
 
 
 def build_bypass_display(bypass_analysis):
-    """Convert bypass analysis dict to a Discord embed string. Mirrors the bash case statement in the workflow."""
     risk = bypass_analysis.get("bypassRisk", "unknown")
     reasoning = bypass_analysis.get("reasoning", "")
     example = bypass_analysis.get("example", "")
     detail = f"{reasoning} — {example}" if example else reasoning
     if risk == "none":
-        return f"[NONE] {detail}" if detail else "[NONE] Fix looks complete"
+        return "Fix looks complete"
     if risk == "low":
-        return f"[LOW] {detail}"
+        return f"Low bypass risk: {detail}"
     if risk == "medium":
-        return f"[MEDIUM] {detail}"
+        return f"Medium bypass risk: {detail}"
     if risk == "high":
-        return f"[HIGH] {detail}"
-    return "[UNKNOWN] Analysis unavailable"
+        return f"High bypass risk: {detail}"
+    return "Analysis unavailable"
 
 
 def main():
@@ -119,11 +118,13 @@ def main():
             sha = finding["commit"]["sha"]
             vuln_type = finding.get("analysis", {}).get("vulnerabilityType", "Unknown")
             fix_desc = finding.get("analysis", {}).get("description", "")
+            affected_code = finding.get("analysis", {}).get("affectedCode", "")
+            proof_of_concept = finding.get("analysis", {}).get("proofOfConcept", "")
 
             diff = fetch_diff(owner, repo, sha)
             if diff.startswith("# Error fetching diff:") or not diff.strip():
                 raise ValueError(f"diff unavailable: {diff[:120]}")
-            bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc)
+            bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc, affected_code, proof_of_concept)
         except Exception as e:
             bypass = {
                 "bypassRisk": "unknown",
