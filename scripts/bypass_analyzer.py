@@ -29,8 +29,6 @@ def fetch_diff(owner, repo, sha):
     return combined[:20000]
 
 
-# cache_control on the system block activates once this prompt exceeds ~1024 tokens.
-# At current length it is a no-op but stays in place so expansion activates caching automatically.
 _SYSTEM_PROMPT = """\
 You are a security code reviewer. A commit was identified as a security fix.
 Analyze whether the implementation has bypasses or subtle flaws that still allow exploitation.
