@@ -37,22 +37,23 @@ Diff:
 {diff}
 
 Respond with JSON only (no markdown):
-{{
+{
   "bypassRisk": "none|low|medium|high",
   "reasoning": "one concise sentence",
   "example": "concrete bypass technique or payload if risk is not none, else empty string"
-}}"""
+}"""
 
 
 def analyze_bypass(api_key, diff, vuln_type, fix_description):
-    prompt = _BYPASS_PROMPT.format(
-        vuln_type=vuln_type,
-        fix_description=fix_description,
-        diff=diff,
+    prompt = (
+        _BYPASS_PROMPT
+        .replace("{vuln_type}", vuln_type)
+        .replace("{fix_description}", fix_description)
+        .replace("{diff}", diff)
     )
     payload = json.dumps({
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 256,
+        "max_tokens": 512,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
