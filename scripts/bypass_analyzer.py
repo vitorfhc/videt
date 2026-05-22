@@ -29,6 +29,8 @@ def fetch_diff(owner, repo, sha):
     return combined[:20000]
 
 
+# cache_control on the system block activates once this prompt exceeds ~1024 tokens.
+# At current length it is a no-op but stays in place so expansion activates caching automatically.
 _SYSTEM_PROMPT = """\
 You are a security code reviewer. A commit was identified as a security fix.
 Analyze whether the implementation has bypasses or subtle flaws that still allow exploitation.
@@ -41,27 +43,18 @@ Respond with JSON only (no markdown):
   "example": "concrete bypass technique or payload if risk is not none, else empty string"
 }"""
 
-_USER_TEMPLATE = """\
-Vulnerability type: {vuln_type}
-Fix description: {fix_description}{optional_fields}
-
-Diff:
-{diff}"""
-
 
 def analyze_bypass(api_key, diff, vuln_type, fix_description, affected_code="", proof_of_concept=""):
-    optional_lines = []
+    parts = [
+        f"Vulnerability type: {vuln_type}",
+        f"Fix description: {fix_description}",
+    ]
     if affected_code:
-        optional_lines.append(f"\nVulnerable code before patch: {affected_code}")
+        parts.append(f"Vulnerable code before patch: {affected_code}")
     if proof_of_concept:
-        optional_lines.append(f"\nOriginal proof of concept: {proof_of_concept}")
-    user_content = (
-        _USER_TEMPLATE
-        .replace("{vuln_type}", vuln_type)
-        .replace("{fix_description}", fix_description)
-        .replace("{optional_fields}", "".join(optional_lines))
-        .replace("{diff}", diff)
-    )
+        parts.append(f"Original proof of concept: {proof_of_concept}")
+    parts.append(f"\nDiff:\n{diff}")
+    user_content = "\n".join(parts)
     payload = json.dumps({
         "model": "claude-sonnet-4-6",
         "max_tokens": 1500,
