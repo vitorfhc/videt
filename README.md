@@ -1,18 +1,31 @@
 # videt
 
-Automated monitor for **silent security patches** — detects vulnerability fixes in major open-source projects before a CVE is publicly assigned.
+Automated monitor for **silent security patches** — detects vulnerability fixes in major open-source projects before a CVE is publicly assigned, and checks whether those fixes are actually exploitable.
 
 ## What problem does this solve?
 
-There's a dangerous window between when a security patch lands in source code and when it gets a CVE number. During this "negative-day" period, the vulnerability is effectively public (anyone can read the diff) but most defenders haven't acted yet. videt closes that gap by alerting you the moment a suspicious commit is detected.
+There's a dangerous window between when a security patch lands in source code and when it gets a CVE number. During this "negative-day" period, the vulnerability is effectively public (anyone can read the diff) but most defenders haven't acted yet. videt closes that gap by alerting you the moment a suspicious commit is detected — and telling you whether the fix is complete or still bypassable.
 
 ## How it works
 
 1. A GitHub Action runs every hour
 2. [`vulnerability-spoiler-alert-action`](https://github.com/spaceraccoon/vulnerability-spoiler-alert-action) fetches recent commits from each monitored repo
 3. Claude AI triages commits for security relevance, then a judge model verifies findings
-4. Confirmed findings create a labeled GitHub Issue in this repo
-5. A Discord embed is sent immediately with severity, type, commit link, and issue link
+4. For confirmed findings, `scripts/bypass_analyzer.py` fetches the commit diff from GitHub and calls Claude Haiku to detect implementation flaws in the fix
+5. Confirmed findings create a labeled GitHub Issue in this repo
+6. A Discord embed is sent with severity, type, commit link, issue link, and a **Fix Quality** field indicating whether the patch is complete or bypassable
+
+## Fix Quality field
+
+Each Discord alert includes a Fix Quality assessment:
+
+| Icon | Meaning |
+|------|---------|
+| ✅ | Fix looks complete |
+| ⚠️ | Low bypass risk |
+| 🟡 | Possible bypass (with example) |
+| 🔴 | Bypass likely (with example) |
+| ❓ | Analysis unavailable |
 
 ## Monitored repositories
 
@@ -27,6 +40,8 @@ Fork this repo, then add two repository secrets under **Settings → Secrets and
 | `ANTHROPIC_API_KEY` | Your Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
 | `DISCORD_WEBHOOK_URL` | Webhook URL from your Discord server (see below) |
 
+`GITHUB_TOKEN` is injected automatically by GitHub Actions — no configuration needed.
+
 The workflow runs automatically on the next hour tick. You can also trigger it manually from the **Actions** tab.
 
 ### Discord webhook setup
@@ -38,7 +53,7 @@ The workflow runs automatically on the next hour tick. You can also trigger it m
 ## Outputs
 
 - **GitHub Issues** — one per confirmed finding, labelled `vulnerability` and `severity:critical/high/medium/low`
-- **Discord embeds** — colour-coded by severity (red → critical, orange → high, yellow → medium, green → low), linking to the issue and commit
+- **Discord embeds** — colour-coded by severity (red → critical, orange → high, yellow → medium, green → low), linking to the issue and commit, with Fix Quality bypass analysis
 
 ## Disclaimer
 

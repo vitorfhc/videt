@@ -5,10 +5,14 @@ import urllib.request
 
 def fetch_diff(owner, repo, sha):
     url = f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}"
-    req = urllib.request.Request(url, headers={
+    headers = {
         "Accept": "application/json",
         "User-Agent": "videt-bypass-analyzer",
-    })
+    }
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
