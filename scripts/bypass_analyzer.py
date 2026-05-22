@@ -90,14 +90,14 @@ def build_bypass_display(bypass_analysis):
     example = bypass_analysis.get("example", "")
     detail = f"{reasoning} — {example}" if example else reasoning
     if risk == "none":
-        return f"[NONE] {detail}" if detail else "[NONE] Fix looks complete"
+        return "✅ Fix looks complete"
     if risk == "low":
-        return f"[LOW] {detail}"
+        return f"⚠️ {detail}"
     if risk == "medium":
-        return f"[MEDIUM] {detail}"
+        return f"🟡 {detail}"
     if risk == "high":
-        return f"[HIGH] {detail}"
-    return "[UNKNOWN] Analysis unavailable"
+        return f"🔴 {detail}"
+    return "❓ Analysis unavailable"
 
 
 def main():
