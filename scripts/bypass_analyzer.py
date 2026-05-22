@@ -71,6 +71,7 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
 
 
 def build_bypass_display(bypass_analysis):
+    """Convert bypass analysis dict to a Discord embed string. Mirrors the bash case statement in the workflow."""
     risk = bypass_analysis.get("bypassRisk", "unknown")
     reasoning = bypass_analysis.get("reasoning", "")
     example = bypass_analysis.get("example", "")
@@ -90,19 +91,22 @@ def main():
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     out_path = os.environ.get("ENRICHED_OUTPUT", "/tmp/enriched-results.json")
 
-    findings = json.loads(results_raw)
+    try:
+        findings = json.loads(results_raw)
+    except json.JSONDecodeError as e:
+        print(f"Warning: could not parse RESULTS: {e}. Treating as empty.")
+        findings = []
     enriched = []
 
     for finding in findings:
-        owner = finding["repo"]["owner"]
-        repo = finding["repo"]["repo"]
-        sha = finding["commit"]["sha"]
-        vuln_type = finding.get("analysis", {}).get("vulnerabilityType", "Unknown")
-        fix_desc = finding.get("analysis", {}).get("description", "")
-
-        diff = fetch_diff(owner, repo, sha)
-
         try:
+            owner = finding["repo"]["owner"]
+            repo = finding["repo"]["repo"]
+            sha = finding["commit"]["sha"]
+            vuln_type = finding.get("analysis", {}).get("vulnerabilityType", "Unknown")
+            fix_desc = finding.get("analysis", {}).get("description", "")
+
+            diff = fetch_diff(owner, repo, sha)
             bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc)
         except Exception as e:
             bypass = {
@@ -111,8 +115,9 @@ def main():
                 "example": "",
             }
 
-        finding["bypassAnalysis"] = bypass
-        enriched.append(finding)
+        enriched_finding = dict(finding)
+        enriched_finding["bypassAnalysis"] = bypass
+        enriched.append(enriched_finding)
 
     with open(out_path, "w") as f:
         json.dump(enriched, f)

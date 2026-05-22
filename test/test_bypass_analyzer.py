@@ -4,7 +4,6 @@ import os
 import unittest
 import tempfile
 from unittest.mock import patch, MagicMock
-from io import BytesIO
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
@@ -169,6 +168,8 @@ class TestMain(unittest.TestCase):
         with patch('urllib.request.urlopen', side_effect=fake_urlopen), \
              patch.dict('os.environ', env):
             main()
+
+        self.assertEqual(call_count[0], 2)  # one GitHub call + one Anthropic call
 
         with open(out_path) as f:
             enriched = json.load(f)
