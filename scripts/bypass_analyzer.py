@@ -43,7 +43,7 @@ Diff:
 Respond with JSON only (no markdown):
 {
   "bypassRisk": "none|low|medium|high",
-  "reasoning": "one concise sentence",
+  "reasoning": "one to two concise paragraphs",
   "example": "concrete bypass technique or payload if risk is not none, else empty string"
 }"""
 
@@ -88,15 +88,16 @@ def build_bypass_display(bypass_analysis):
     risk = bypass_analysis.get("bypassRisk", "unknown")
     reasoning = bypass_analysis.get("reasoning", "")
     example = bypass_analysis.get("example", "")
+    detail = f"{reasoning} — {example}" if example else reasoning
     if risk == "none":
-        return "✅ Fix looks complete"
+        return f"[NONE] {detail}" if detail else "[NONE] Fix looks complete"
     if risk == "low":
-        return f"⚠️ {reasoning}"
+        return f"[LOW] {detail}"
     if risk == "medium":
-        return f"🟡 {reasoning} — {example}"
+        return f"[MEDIUM] {detail}"
     if risk == "high":
-        return f"🔴 {reasoning} — {example}"
-    return "❓ Analysis unavailable"
+        return f"[HIGH] {detail}"
+    return "[UNKNOWN] Analysis unavailable"
 
 
 def main():
