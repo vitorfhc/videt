@@ -117,6 +117,40 @@ class TestAnalyzeBypass(unittest.TestCase):
             with self.assertRaises(ValueError):
                 analyze_bypass("key", "diff", "XSS", "escaped output")
 
+    def test_affected_code_and_poc_appear_in_prompt(self):
+        expected = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
+        captured = {}
+        def fake_urlopen(req, timeout=None):
+            captured['body'] = json.loads(req.data)
+            return self._make_api_response(expected)
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            analyze_bypass(
+                "key", "diff", "XSS", "escaped output",
+                affected_code="AFFECTED_MARKER",
+                proof_of_concept="POC_MARKER",
+            )
+        user_content = captured['body']['messages'][0]['content']
+        self.assertIn("AFFECTED_MARKER", user_content)
+        self.assertIn("POC_MARKER", user_content)
+
+    def test_prompt_caching_header_and_structure(self):
+        expected = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
+        captured = {}
+        def fake_urlopen(req, timeout=None):
+            captured['req'] = req
+            captured['body'] = json.loads(req.data)
+            return self._make_api_response(expected)
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            analyze_bypass("key", "diff", "XSS", "escaped output")
+        self.assertEqual(
+            captured['req'].get_header('Anthropic-beta'),
+            'prompt-caching-2024-07-31',
+        )
+        system = captured['body']['system']
+        self.assertIsInstance(system, list)
+        self.assertEqual(system[0]['type'], 'text')
+        self.assertEqual(system[0]['cache_control'], {'type': 'ephemeral'})
+
 
 class TestBuildBypassDisplay(unittest.TestCase):
 

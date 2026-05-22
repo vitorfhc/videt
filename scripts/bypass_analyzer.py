@@ -29,16 +29,10 @@ def fetch_diff(owner, repo, sha):
     return combined[:20000]
 
 
-_BYPASS_PROMPT = """\
+_SYSTEM_PROMPT = """\
 You are a security code reviewer. A commit was identified as a security fix.
 Analyze whether the implementation has bypasses or subtle flaws that still allow exploitation.
 Only consider what is visible in the diff — do not speculate about other code paths.
-
-Vulnerability type: {vuln_type}
-Fix description: {fix_description}
-
-Diff:
-{diff}
 
 Respond with JSON only (no markdown):
 {
@@ -47,18 +41,30 @@ Respond with JSON only (no markdown):
   "example": "concrete bypass technique or payload if risk is not none, else empty string"
 }"""
 
+_USER_TEMPLATE = """\
+Vulnerability type: {vuln_type}
+Fix description: {fix_description}
+Vulnerable code before patch: {affected_code}
+Original proof of concept: {proof_of_concept}
 
-def analyze_bypass(api_key, diff, vuln_type, fix_description):
-    prompt = (
-        _BYPASS_PROMPT
+Diff:
+{diff}"""
+
+
+def analyze_bypass(api_key, diff, vuln_type, fix_description, affected_code="", proof_of_concept=""):
+    user_content = (
+        _USER_TEMPLATE
         .replace("{vuln_type}", vuln_type)
         .replace("{fix_description}", fix_description)
+        .replace("{affected_code}", affected_code)
+        .replace("{proof_of_concept}", proof_of_concept)
         .replace("{diff}", diff)
     )
     payload = json.dumps({
         "model": "claude-sonnet-4-6",
         "max_tokens": 1500,
-        "messages": [{"role": "user", "content": prompt}],
+        "system": [{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+        "messages": [{"role": "user", "content": user_content}],
     }).encode()
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
@@ -66,6 +72,7 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
         headers={
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
             "content-type": "application/json",
         },
     )
