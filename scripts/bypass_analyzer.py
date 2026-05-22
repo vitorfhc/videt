@@ -43,21 +43,23 @@ Respond with JSON only (no markdown):
 
 _USER_TEMPLATE = """\
 Vulnerability type: {vuln_type}
-Fix description: {fix_description}
-Vulnerable code before patch: {affected_code}
-Original proof of concept: {proof_of_concept}
+Fix description: {fix_description}{optional_fields}
 
 Diff:
 {diff}"""
 
 
 def analyze_bypass(api_key, diff, vuln_type, fix_description, affected_code="", proof_of_concept=""):
+    optional_lines = []
+    if affected_code:
+        optional_lines.append(f"\nVulnerable code before patch: {affected_code}")
+    if proof_of_concept:
+        optional_lines.append(f"\nOriginal proof of concept: {proof_of_concept}")
     user_content = (
         _USER_TEMPLATE
         .replace("{vuln_type}", vuln_type)
         .replace("{fix_description}", fix_description)
-        .replace("{affected_code}", affected_code)
-        .replace("{proof_of_concept}", proof_of_concept)
+        .replace("{optional_fields}", "".join(optional_lines))
         .replace("{diff}", diff)
     )
     payload = json.dumps({
