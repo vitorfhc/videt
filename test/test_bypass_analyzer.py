@@ -7,7 +7,7 @@ from io import BytesIO
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from bypass_analyzer import fetch_diff
+from bypass_analyzer import fetch_diff, analyze_bypass
 
 
 class TestFetchDiff(unittest.TestCase):
@@ -55,6 +55,49 @@ class TestFetchDiff(unittest.TestCase):
             result = fetch_diff("owner", "repo", "abc123")
         self.assertNotIn("binary.bin", result)
         self.assertIn("code.py", result)
+
+
+class TestAnalyzeBypass(unittest.TestCase):
+
+    def _make_api_response(self, bypass_dict):
+        body = json.dumps({
+            "content": [{"text": json.dumps(bypass_dict)}]
+        }).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        return resp
+
+    def test_returns_parsed_bypass_dict(self):
+        expected = {"bypassRisk": "high", "reasoning": "missing sep", "example": "../etc"}
+        with patch('urllib.request.urlopen', return_value=self._make_api_response(expected)):
+            result = analyze_bypass("key", "diff content", "PathTraversal", "added realpath check")
+        self.assertEqual(result["bypassRisk"], "high")
+        self.assertEqual(result["reasoning"], "missing sep")
+        self.assertEqual(result["example"], "../etc")
+
+    def test_sends_correct_model_and_max_tokens(self):
+        expected = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
+        captured = {}
+        def fake_urlopen(req, timeout=None):
+            captured['body'] = json.loads(req.data)
+            return self._make_api_response(expected)
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            analyze_bypass("key", "diff", "XSS", "escaped output")
+        self.assertEqual(captured['body']['model'], "claude-haiku-4-5-20251001")
+        self.assertEqual(captured['body']['max_tokens'], 256)
+
+    def test_diff_appears_in_prompt(self):
+        expected = {"bypassRisk": "none", "reasoning": "ok", "example": ""}
+        captured = {}
+        def fake_urlopen(req, timeout=None):
+            captured['body'] = json.loads(req.data)
+            return self._make_api_response(expected)
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
+            analyze_bypass("key", "UNIQUE_DIFF_MARKER", "SQLi", "parameterized query")
+        prompt = captured['body']['messages'][0]['content']
+        self.assertIn("UNIQUE_DIFF_MARKER", prompt)
 
 
 if __name__ == '__main__':
