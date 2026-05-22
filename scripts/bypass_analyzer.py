@@ -68,3 +68,57 @@ def analyze_bypass(api_key, diff, vuln_type, fix_description):
     with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
     return json.loads(data["content"][0]["text"].strip())
+
+
+def build_bypass_display(bypass_analysis):
+    risk = bypass_analysis.get("bypassRisk", "unknown")
+    reasoning = bypass_analysis.get("reasoning", "")
+    example = bypass_analysis.get("example", "")
+    if risk == "none":
+        return "✅ Fix looks complete"
+    if risk == "low":
+        return f"⚠️ {reasoning}"
+    if risk == "medium":
+        return f"🟡 {reasoning} — {example}"
+    if risk == "high":
+        return f"🔴 {reasoning} — {example}"
+    return "❓ Analysis unavailable"
+
+
+def main():
+    results_raw = os.environ.get("RESULTS", "[]")
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    out_path = os.environ.get("ENRICHED_OUTPUT", "/tmp/enriched-results.json")
+
+    findings = json.loads(results_raw)
+    enriched = []
+
+    for finding in findings:
+        owner = finding["repo"]["owner"]
+        repo = finding["repo"]["repo"]
+        sha = finding["commit"]["sha"]
+        vuln_type = finding.get("analysis", {}).get("vulnerabilityType", "Unknown")
+        fix_desc = finding.get("analysis", {}).get("description", "")
+
+        diff = fetch_diff(owner, repo, sha)
+
+        try:
+            bypass = analyze_bypass(api_key, diff, vuln_type, fix_desc)
+        except Exception as e:
+            bypass = {
+                "bypassRisk": "unknown",
+                "reasoning": f"Analysis failed: {e}",
+                "example": "",
+            }
+
+        finding["bypassAnalysis"] = bypass
+        enriched.append(finding)
+
+    with open(out_path, "w") as f:
+        json.dump(enriched, f)
+
+    print(f"Analyzed {len(enriched)} finding(s)")
+
+
+if __name__ == "__main__":
+    main()

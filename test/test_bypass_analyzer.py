@@ -2,12 +2,13 @@ import json
 import sys
 import os
 import unittest
+import tempfile
 from unittest.mock import patch, MagicMock
 from io import BytesIO
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from bypass_analyzer import fetch_diff, analyze_bypass
+from bypass_analyzer import fetch_diff, analyze_bypass, build_bypass_display, main
 
 
 class TestFetchDiff(unittest.TestCase):
@@ -98,6 +99,105 @@ class TestAnalyzeBypass(unittest.TestCase):
             analyze_bypass("key", "UNIQUE_DIFF_MARKER", "SQLi", "parameterized query")
         prompt = captured['body']['messages'][0]['content']
         self.assertIn("UNIQUE_DIFF_MARKER", prompt)
+
+
+class TestBuildBypassDisplay(unittest.TestCase):
+
+    def test_none_risk(self):
+        result = build_bypass_display({"bypassRisk": "none", "reasoning": "ok", "example": ""})
+        self.assertEqual(result, "✅ Fix looks complete")
+
+    def test_low_risk(self):
+        result = build_bypass_display({"bypassRisk": "low", "reasoning": "minor concern", "example": ""})
+        self.assertEqual(result, "⚠️ minor concern")
+
+    def test_medium_risk_includes_example(self):
+        result = build_bypass_display({"bypassRisk": "medium", "reasoning": "partial fix", "example": "payload"})
+        self.assertEqual(result, "🟡 partial fix — payload")
+
+    def test_high_risk_includes_example(self):
+        result = build_bypass_display({"bypassRisk": "high", "reasoning": "bypassable", "example": "../etc"})
+        self.assertEqual(result, "🔴 bypassable — ../etc")
+
+    def test_unknown_risk(self):
+        result = build_bypass_display({"bypassRisk": "unknown", "reasoning": "", "example": ""})
+        self.assertEqual(result, "❓ Analysis unavailable")
+
+
+class TestMain(unittest.TestCase):
+
+    def _make_api_response(self, bypass_dict):
+        body = json.dumps({"content": [{"text": json.dumps(bypass_dict)}]}).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        return resp
+
+    def _make_github_response(self):
+        payload = {"files": [{"filename": "fix.py", "patch": "@@ -1 +1 @@\n-bad\n+good"}]}
+        resp = MagicMock()
+        resp.read.return_value = json.dumps(payload).encode()
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        return resp
+
+    def test_main_writes_enriched_results(self):
+        findings = [
+            {
+                "repo": {"owner": "acme", "repo": "app"},
+                "commit": {"sha": "abc123", "url": "https://github.com/acme/app/commit/abc123",
+                           "message": "fix", "author": "dev", "date": "2026-01-01T00:00:00Z"},
+                "analysis": {"vulnerabilityType": "PathTraversal", "description": "added realpath"},
+            }
+        ]
+        bypass = {"bypassRisk": "high", "reasoning": "missing sep", "example": "../evil"}
+
+        call_count = [0]
+        def fake_urlopen(req, timeout=None):
+            call_count[0] += 1
+            if "api.anthropic.com" in req.full_url:
+                return self._make_api_response(bypass)
+            return self._make_github_response()
+
+        out_path = os.path.join(tempfile.gettempdir(), "test_enriched.json")
+        env = {
+            "RESULTS": json.dumps(findings),
+            "ANTHROPIC_API_KEY": "test-key",
+            "ENRICHED_OUTPUT": out_path,
+        }
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen), \
+             patch.dict('os.environ', env):
+            main()
+
+        with open(out_path) as f:
+            enriched = json.load(f)
+
+        self.assertEqual(len(enriched), 1)
+        self.assertEqual(enriched[0]["bypassAnalysis"]["bypassRisk"], "high")
+
+    def test_main_handles_per_finding_error_gracefully(self):
+        findings = [
+            {
+                "repo": {"owner": "acme", "repo": "app"},
+                "commit": {"sha": "deadbeef", "url": "", "message": "", "author": "", "date": ""},
+                "analysis": {"vulnerabilityType": "XSS", "description": "escaped"},
+            }
+        ]
+        out_path = os.path.join(tempfile.gettempdir(), "test_enriched_err.json")
+        env = {
+            "RESULTS": json.dumps(findings),
+            "ANTHROPIC_API_KEY": "test-key",
+            "ENRICHED_OUTPUT": out_path,
+        }
+        with patch('urllib.request.urlopen', side_effect=Exception("network error")), \
+             patch.dict('os.environ', env):
+            main()
+
+        with open(out_path) as f:
+            enriched = json.load(f)
+
+        self.assertEqual(enriched[0]["bypassAnalysis"]["bypassRisk"], "unknown")
 
 
 if __name__ == '__main__':
